@@ -81,11 +81,38 @@ int main(int argc, char **argv)
     {
         // Clear output from previous iteration
         clearOutput(num_lines);
-
+        
         // Do the following:
         //   - Get current time
+        uint64_t current_time = currentTime();
+
         //   - *Check if any processes need to move from NotStarted to Ready (based on elapsed time), and if so put that process in the ready queue
+        // need to check if start time >= process launch time, if it is, add to ready queue
+        // loop through all the processes
+        for (i = 0; i < config->num_processes; i++)
+        {   // check the state of the process
+            if(processes[i]->getState() == Process::State::NotStarted)
+            {   // compare the start time of the process to the elapsed time
+                if(processes[i]->getStartTime() >= (current_time - start))
+                {   // lock the shared data, update state, push the process into the ready queue
+                    std::lock_guard<std::mutex> lock(shared_data->mutex);
+                    processes[i]->setState(Process::State::Ready, current_time);
+                    shared_data->ready_queue.push_back(processes[i]);
+                }//if
+            }//if
+        }//for
+
         //   - *Check if any processes have finished their I/O burst, and if so put that process back in the ready queue
+        for (i = 0; i < config->num_processes; i++)
+        {   
+           if(processes[i]->getState() == Process::State::IO)
+            {// lock the shared data, update state, push the process into the ready queue
+                std::lock_guard<std::mutex> lock(shared_data->mutex);
+                processes[i]->setState(Process::State::Ready, current_time);
+                shared_data->ready_queue.push_back(processes[i]);
+            }//if
+        }//for
+
         //   - *Check if any running process need to be interrupted (RR time slice expires or newly ready process has higher priority)
         //   - *Sort the ready queue (if needed - based on scheduling algorithm)
         //   - Determine if all processes are in the terminated state
@@ -123,7 +150,7 @@ int main(int argc, char **argv)
 
 void coreRunProcesses(uint8_t core_id, SchedulerData *shared_data)
 {
-    // Work to be done by each core idependent of the other cores
+    // Work to be done by each core independent of the other cores
     // Repeat until all processes in terminated state:
     //   - *Get process at front of ready queue
     //   - Simulate the processes running until one of the following:
