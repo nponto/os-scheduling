@@ -114,7 +114,48 @@ int main(int argc, char **argv)
         }//for
 
         //   - *Check if any running process need to be interrupted (RR time slice expires or newly ready process has higher priority)
+        // RR check
+        // change to loop below
+        if (shared_data->algorithm == ScheduleAlgorithm::RR) {
+            std::list<Process *>::iterator it;
+            for (it = shared_data->ready_queue.begin(); it!= shared_data->ready_queue.end(); it++) {
+                Process* current_process = *it;
+                if (current_process->getState() == Process::State::Running) {
+                    int elapsedTime = current_time - processes[i]->getBurstStartTime();
+                    if (elapsedTime >= shared_data->time_slice) {
+                        std::lock_guard<std::mutex> lock(shared_data->mutex);
+                        processes[i]->interrupt();
+                    }
+                }
+            }
+        }
+
+        // PP
+        if (shared_data->algorithm == ScheduleAlgorithm::PP) {
+            // change loop, create iterator for std::list
+            std::list<Process *>::iterator it;
+            for (it = shared_data->ready_queue.begin(); it != shared_data->ready_queue.end(); it++) {
+                Process* current_process = *it;
+                Process* next_process = *it + 1;
+                if (current_process->getState() == Process::State::Running) {
+                    // where do we check? front or back of each process?
+                    if (current_process->getPriority() > next_process->getPriority()) {
+                        std::lock_guard<std::mutex> lock(shared_data->mutex);
+                        processes[i]->interrupt();
+                    }
+                }
+            }
+        }
+
         //   - *Sort the ready queue (if needed - based on scheduling algorithm)
+        if (shared_data->algorithm == ScheduleAlgorithm::PP) {
+            shared_data->ready_queue.sort(PpComparator::operator());
+        }
+        if (shared_data->algorithm == ScheduleAlgorithm::SJF) {
+            shared_data->ready_queue.sort(SjfComparator::operator());
+        }
+
+
         //   - Determine if all processes are in the terminated state
         //   - * = accesses shared data (ready queue), so be sure to use proper synchronization
 
