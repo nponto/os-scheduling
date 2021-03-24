@@ -181,6 +181,7 @@ int main(int argc, char **argv)
     //     - Overall average
     //  - Average turnaround time
     //  - Average waiting time
+    
 
 
     // Clean up before quitting program
@@ -203,6 +204,43 @@ void coreRunProcesses(uint8_t core_id, SchedulerData *shared_data)
     //     - *Ready queue if interrupted (be sure to modify the CPU burst time to now reflect the remaining time)
     //  - Wait context switching time
     //  - * = accesses shared data (ready queue), so be sure to use proper synchronization
+    while(!shared_data->all_terminated)
+    {
+        Process* core_process;
+        {
+            std::lock_guard<std::mutex> lock(shared_data->mutex);
+            core_process = shared_data->ready_queue.front();
+            shared_data->ready_queue.pop_front();
+        }
+        
+        //simulate running until burst time elapsed or interrupt
+        while( !(core_process->getRemainingTime() == 0) || !(core_process->isInterrupted()) )
+        {
+            core_process->updateProcess(currentTime());
+            //if process finishes burst time, set to io if there are more bursts, if no more bursts, set to terminated
+        }
+
+        //place the process back in the appropriate queue
+        if(core_process->getRemainingTime() > 0)
+        {   //more time remaining - IO
+            core_process->setState(Process::State::IO, currentTime());
+        }
+        else if(core_process->getRemainingTime() == 0)
+        {   //no more process remaining - terminate
+            core_process->setState(Process::State::Terminated, currentTime());
+        }
+        else if(core_process->isInterrupted())
+        {   //into ready queue if interrupted
+            std::lock_guard<std::mutex> lock(shared_data->mutex);
+            core_process->interruptHandled();
+            shared_data->ready_queue.push_back(core_process);
+            //--------------- modify cpu burst time -------------
+        }
+        
+        //context switch time
+        usleep(shared_data->context_switch);
+
+    }//while
 }
 
 int printProcessOutput(std::vector<Process*>& processes, std::mutex& mutex)

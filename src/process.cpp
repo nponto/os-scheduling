@@ -123,7 +123,13 @@ void Process::interruptHandled()
 void Process::updateProcess(uint64_t current_time)
 {
     // use `current_time` to update turnaround time, wait time, burst times, 
-    // cpu time, and remaining time
+    // cpu time, and remaining timed
+    //---------------unfinished---------------
+    uint64_t elapsed_time = (current_time-getBurstStartTime());
+    updateBurstTime(current_burst, burst_times[current_burst] - elapsed_time );
+    remain_time = remain_time - elapsed_time;
+
+    
 }
 
 void Process::updateBurstTime(int burst_idx, uint32_t new_time)
@@ -138,8 +144,15 @@ void Process::updateBurstTime(int burst_idx, uint32_t new_time)
 // SJF - comparator for sorting read queue based on shortest remaining CPU time
 bool SjfComparator::operator ()(const Process *p1, const Process *p2)
 {
-    // your code here!
-    return false; // change this!
+    // if process p1 has less time remaining than process p2
+    if( p1->getRemainingTime() <= p2->getRemainingTime())
+    {
+        return true;
+    }
+    else
+    {
+        return false;
+    }
 }
 
 // PP - comparator for sorting read queue based on priority
@@ -156,7 +169,8 @@ bool PpComparator::operator ()(const Process *p1, const Process *p2)
     // p1 and p2 are same priority
     else {
         // use first come first serve here
-        
+        printf("ppcomparator else statement");
+        return false;
     }
     // your code here!
     return false; // change this!
