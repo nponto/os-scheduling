@@ -192,6 +192,7 @@ int main(int argc, char **argv)
 
 void coreRunProcesses(uint8_t core_id, SchedulerData *shared_data)
 {
+    //test
     // Work to be done by each core independent of the other cores
     // Repeat until all processes in terminated state:
     //   - *Get process at front of ready queue
