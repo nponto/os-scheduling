@@ -33,7 +33,9 @@ public:
     uint16_t getPid() const;
     uint32_t getStartTime() const;
     uint8_t getPriority() const;
+    uint64_t getCurrentBurstTime() const;
     uint64_t getBurstStartTime() const;
+    uint64_t getRemainingBurstTime(uint64_t current_time) const;
     State getState() const;
     bool isInterrupted() const;
     int8_t getCpuCore() const;
@@ -47,6 +49,7 @@ public:
     void setCpuCore(int8_t core_num);
     void interrupt();
     void interruptHandled();
+    void nextBurst();
 
     void updateProcess(uint64_t current_time);
     void updateBurstTime(int burst_idx, uint32_t new_time);

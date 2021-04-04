@@ -56,6 +56,16 @@ uint64_t Process::getBurstStartTime() const
     return burst_start_time;
 }
 
+uint64_t Process::getCurrentBurstTime() const
+{
+    return burst_times[current_burst];
+}
+
+uint64_t Process::getRemainingBurstTime(uint64_t current_time) const
+{
+    return getCurrentBurstTime() - (current_time - getBurstStartTime());
+}
+
 Process::State Process::getState() const
 {
     return state;
@@ -96,6 +106,11 @@ void Process::setBurstStartTime(uint64_t current_time)
     burst_start_time = current_time;
 }
 
+void Process::nextBurst()
+{
+    current_burst = current_burst + 1;
+}
+
 void Process::setState(State new_state, uint64_t current_time)
 {
     if (state == State::NotStarted && new_state == State::Ready)
@@ -127,7 +142,10 @@ void Process::updateProcess(uint64_t current_time)
     //---------------unfinished---------------
     uint64_t elapsed_time = (current_time-getBurstStartTime());
     updateBurstTime(current_burst, burst_times[current_burst] - elapsed_time );
-    remain_time = remain_time - elapsed_time;
+    //remain_time = remain_time - elapsed_time;
+    //turn_time = current_time - getStartTime();
+    //wait_time = wait_time + turn_time - 
+
 
     
 }
@@ -144,8 +162,11 @@ void Process::updateBurstTime(int burst_idx, uint32_t new_time)
 // SJF - comparator for sorting read queue based on shortest remaining CPU time
 bool SjfComparator::operator ()(const Process *p1, const Process *p2)
 {
+
+    return p1->getRemainingTime() <= p2->getRemainingTime();
     // if process p1 has less time remaining than process p2
-    if( p1->getRemainingTime() <= p2->getRemainingTime())
+    /*
+    if( )
     {
         return true;
     }
@@ -153,6 +174,7 @@ bool SjfComparator::operator ()(const Process *p1, const Process *p2)
     {
         return false;
     }
+    */
 }
 
 // PP - comparator for sorting read queue based on priority

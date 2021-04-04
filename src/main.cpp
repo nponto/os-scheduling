@@ -64,6 +64,7 @@ int main(int argc, char **argv)
             shared_data->ready_queue.push_back(p);
         }
     }
+    
 
     // Free configuration data from memory
     deleteConfig(config);
@@ -74,7 +75,8 @@ int main(int argc, char **argv)
     {
         schedule_threads[i] = std::thread(coreRunProcesses, i, shared_data);
     }
-
+    printf("2 num_processes = %d\n", config->num_processes);
+    
     // Main thread work goes here
     int num_lines = 0;
     while (!(shared_data->all_terminated))
@@ -85,25 +87,30 @@ int main(int argc, char **argv)
         // Do the following:
         //   - Get current time
         uint64_t current_time = currentTime();
-
+        
         //   - *Check if any processes need to move from NotStarted to Ready (based on elapsed time), and if so put that process in the ready queue
         // need to check if start time >= process launch time, if it is, add to ready queue
         // loop through all the processes
-        for (i = 0; i < config->num_processes; i++)
+        
+        for (i = 0; i < processes.size(); i++)
         {   // check the state of the process
+            
+
             if(processes[i]->getState() == Process::State::NotStarted)
             {   // compare the start time of the process to the elapsed time
+                
                 if(processes[i]->getStartTime() >= (current_time - start))
                 {   // lock the shared data, update state, push the process into the ready queue
+                
                     std::lock_guard<std::mutex> lock(shared_data->mutex);
                     processes[i]->setState(Process::State::Ready, current_time);
                     shared_data->ready_queue.push_back(processes[i]);
                 }//if
             }//if
         }//for
-
+    
         //   - *Check if any processes have finished their I/O burst, and if so put that process back in the ready queue
-        for (i = 0; i < config->num_processes; i++)
+        for (i = 0; i < processes.size(); i++)
         {   
            if(processes[i]->getState() == Process::State::IO)
             {// lock the shared data, update state, push the process into the ready queue
@@ -112,7 +119,7 @@ int main(int argc, char **argv)
                 shared_data->ready_queue.push_back(processes[i]);
             }//if
         }//for
-
+    
         //   - *Check if any running process need to be interrupted (RR time slice expires or newly ready process has higher priority)
         // RR check
         // change to loop below
@@ -129,7 +136,7 @@ int main(int argc, char **argv)
                 }
             }
         }
-
+   
         // PP
         if (shared_data->algorithm == ScheduleAlgorithm::PP) {
             // change loop, create iterator for std::list
@@ -148,20 +155,30 @@ int main(int argc, char **argv)
         }
 
         //   - *Sort the ready queue (if needed - based on scheduling algorithm)
+        SjfComparator sjf;
         if (shared_data->algorithm == ScheduleAlgorithm::PP) {
-            shared_data->ready_queue.sort(PpComparator::operator());
+            shared_data->ready_queue.sort(sjf);
         }
+        PpComparator pp;
         if (shared_data->algorithm == ScheduleAlgorithm::SJF) {
-            shared_data->ready_queue.sort(SjfComparator::operator());
+            shared_data->ready_queue.sort(pp);
         }
 
-
+        bool temp = true;
         //   - Determine if all processes are in the terminated state
+        for(int i = 0;i < processes.size(); i++)
+        {
+            if(processes[i]->getState() != Process::State::Terminated)
+            {
+                temp = false;
+            }
+        }
+        shared_data->all_terminated = temp;
         //   - * = accesses shared data (ready queue), so be sure to use proper synchronization
 
         // output process status table
         num_lines = printProcessOutput(processes, shared_data->mutex);
-
+    
         // sleep 50 ms
         usleep(50000);
     }
@@ -192,7 +209,6 @@ int main(int argc, char **argv)
 
 void coreRunProcesses(uint8_t core_id, SchedulerData *shared_data)
 {
-    //test
     // Work to be done by each core independent of the other cores
     // Repeat until all processes in terminated state:
     //   - *Get process at front of ready queue
@@ -215,7 +231,7 @@ void coreRunProcesses(uint8_t core_id, SchedulerData *shared_data)
         }
         
         //simulate running until burst time elapsed or interrupt
-        while( !(core_process->getRemainingTime() == 0) || !(core_process->isInterrupted()) )
+        while( !(core_process->getRemainingBurstTime(currentTime()) == 0) || !(core_process->isInterrupted()) )
         {
             core_process->updateProcess(currentTime());
             //if process finishes burst time, set to io if there are more bursts, if no more bursts, set to terminated
@@ -225,6 +241,7 @@ void coreRunProcesses(uint8_t core_id, SchedulerData *shared_data)
         if(core_process->getRemainingTime() > 0)
         {   //more time remaining - IO
             core_process->setState(Process::State::IO, currentTime());
+            core_process->nextBurst();
         }
         else if(core_process->getRemainingTime() == 0)
         {   //no more process remaining - terminate
