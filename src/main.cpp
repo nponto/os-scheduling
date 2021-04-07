@@ -141,8 +141,7 @@ int main(int argc, char **argv)
         }//for
     
         //   - *Check if any running process need to be interrupted (RR time slice expires or newly ready process has higher priority)
-        // RR check
-        // change to loop below
+        // RR check for time splice interrupts
         if (shared_data->algorithm == ScheduleAlgorithm::RR) {
             std::lock_guard<std::mutex> lock(shared_data->mutex);
             for(int i = 0; i < processes.size(); i++)
@@ -154,12 +153,12 @@ int main(int argc, char **argv)
             }
         }
    
-    
         // PP
-        
         if (shared_data->algorithm == ScheduleAlgorithm::PP) {
-            // change loop, create iterator for std::list
+            // Checking for running processes with lower priority
             std::lock_guard<std::mutex> lock(shared_data->mutex);
+
+            // Vector to hold the running processes to make it easier
             std::vector<Process *> running_processes;
             for(int i = 0; i < processes.size(); i++)
             {
@@ -168,20 +167,25 @@ int main(int argc, char **argv)
                     running_processes.push_back(processes[i]);
                 }   
             }
+            // Loop through the elements in the ready queue and see if they have a lower priority than anything running
             std::list<Process *>::iterator it;
             for (it = shared_data->ready_queue.begin(); it!= shared_data->ready_queue.end(); it++) {
                 Process* current_process = *it;
-                bool interrupt = false;
-                int index = -1;
+                bool interrupt = false;             //if an interrupt is needed
+                int index = -1;                     //index of the process to be interrupted
+                // Check each running process. Find the process with the highest priority and last to enter for interruption if need be.
                 for (int i = 0; i < running_processes.size(); i++)
                 {
+                    // Priority comparison with ready queue process
                     if ( current_process->getPriority() < running_processes[i]->getPriority() ) {
                         if( interrupt )
-                        {
+                        {   
+                            // If two processes have a lower priority, choose the one with the lowest priority
                             if(running_processes[i]->getPriority() < running_processes[index]->getPriority() )
                             {
                                 index = i;
                             }
+                            // If the two running processes have the same priority, choose the most recently running process
                             else if (running_processes[i]->getPriority() == running_processes[index]->getPriority())
                             {
                                 if(running_processes[i]->getBurstStartTime() > running_processes[index]->getBurstStartTime())
@@ -371,6 +375,7 @@ void coreRunProcesses(uint8_t core_id, SchedulerData *shared_data)
     while(!shared_data->all_terminated)
     {
         Process* core_process;
+        // Get the front of the ready queue
         {
             std::lock_guard<std::mutex> lock(shared_data->mutex);
 
@@ -383,18 +388,19 @@ void coreRunProcesses(uint8_t core_id, SchedulerData *shared_data)
         }
         if(core_process != NULL){
         core_process->setCpuCore(core_id);
-
-        //simulate running until burst time elapsed or interrupt
         core_process->updateProcess(currentTime());
         core_process->setState(Process::State::Running, currentTime());
+
+        // Simulate running until burst time elapsed or interrupt
         core_process->setBurstStartTime(currentTime());
         while( ((currentTime() - core_process->getBurstStartTime()) < core_process->getCurrentBurstTime()) && !(core_process->isInterrupted()) ) {}
         uint64_t end_time = currentTime();
 
-        //core_process->updateBurstTime(core_process->getCurrentBurst(), end_time-core_process->getCurrentBurstTime());
+        // Update the processes cpu time, burst time, and remain time
+        // This also handles the interrupted burst time
         core_process->updateProcess(end_time);
 
-        //place the process back in the appropriate queue
+        // Place the process back in the appropriate queue
         if(core_process->isInterrupted())
         {   //into ready queue if interrupted
             std::lock_guard<std::mutex> lock(shared_data->mutex);
@@ -402,8 +408,6 @@ void coreRunProcesses(uint8_t core_id, SchedulerData *shared_data)
             core_process->setReadyStartTime(currentTime());
             core_process->setState(Process::State::Ready, currentTime());
             shared_data->ready_queue.push_back(core_process);
-            //--------------- modify cpu burst time -------------
-            //done earlier in the code
         }
         else if(core_process->getRemainingTime() > 0)
         {   //more time remaining - IO

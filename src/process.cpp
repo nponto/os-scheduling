@@ -154,7 +154,6 @@ void Process::updateProcess(uint64_t current_time)
 {
     // use `current_time` to update turnaround time, wait time, burst times, 
     // cpu time, and remaining timed
-    //---------------unfinished---------------
     uint64_t elapsed_time = (current_time-getBurstStartTime());
     
     if(state == State::Running)
