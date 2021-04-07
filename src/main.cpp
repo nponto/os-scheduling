@@ -249,12 +249,102 @@ int main(int argc, char **argv)
 
     // print final statistics
     //  - CPU utilization
+    double total_wait = 1.0;
+    for (i = 0; i < processes.size(); i++) 
+    {
+        double wait_ratio = processes[i]->getWaitTime() / processes[i]->getTurnaroundTime();
+        total_wait = total_wait * wait_ratio;
+    }
+    double cpu_utl = (1.0 - total_wait) * 100;
+
     //  - Throughput
+    
+    
+    // sort queue to iterate over easier for 1st and 2nd halves
+    for (int i = 0; i < processes.size(); i ++) 
+    {
+        for (int j = 0; j < processes.size(); j++) 
+        {
+            if (processes[j]->getTurnaroundTime() > processes[i]->getTurnaroundTime())
+            {
+                Process *temp = processes[i];
+                processes[i] = processes[j];
+                processes[j] = temp;
+            }
+        }
+    }
+
     //     - Average for first 50% of processes finished
+    double first_half_total = 0;
+    double first_half_avg = 0;
+    double first_half_thru;
+    for (int i = 0; i < processes.size() / 2; i++) 
+    {
+        first_half_total = first_half_total + processes[i]->getTurnaroundTime();
+        first_half_avg =  first_half_total / (processes.size() / 2);
+        first_half_thru = (processes.size() / 2) / first_half_avg;
+    }
+    
     //     - Average for second 50% of processes finished
+    double second_half_total = 0;
+    double second_half_avg = 0;
+    double second_half_thru;
+    for (int i = processes.size() / 2; i < processes.size(); i++) 
+    {
+        second_half_total = second_half_total + processes[i]->getTurnaroundTime();
+        if ((processes.size() % 2) != 0)
+        {
+            second_half_avg = second_half_total / ((processes.size() / 2) + 1);
+            second_half_thru = ((processes.size() / 2) + 1) / second_half_avg;
+        } else 
+        {
+            second_half_avg = second_half_total / (processes.size() / 2);
+            second_half_thru = (processes.size() / 2) / second_half_avg;
+        }
+
+    }
+    
     //     - Overall average
+    double max_turn = processes[0]->getTurnaroundTime();
+    for (int i = 0; i < processes.size(); i++) 
+    {
+        if (processes[i]->getTurnaroundTime() > max_turn)
+        {
+            max_turn = processes[i]->getTurnaroundTime();
+        }
+    }
+    double overall_avg = processes.size() / max_turn;
+
     //  - Average turnaround time
+    double turn_total = 0.0;
+    double turn_avg = 0.0;
+    for (i = 0; i < processes.size(); i++) 
+    {
+        turn_total = processes[i]->getTurnaroundTime() + turn_total;
+    }
+    turn_avg = turn_total / processes.size();
+
     //  - Average waiting time
+    double wait_total = 0.0;
+    double wait_avg = 0.0;
+    for (i = 0; i < processes.size(); i++) 
+    {
+        wait_total = processes[i]->getWaitTime() + wait_total;
+    }
+    wait_avg = wait_total / processes.size();
+
+
+    printf("\n");
+    printf("First Half Throughput Average is %.2f processes per second\n", first_half_thru);
+    printf("Second Half Throughput Average is %.2f processes per second\n", second_half_thru);
+    printf("Overall Throughput Average is %.2f processes per second\n", overall_avg);
+    printf("CPU Utilization is %.2f%%\n", cpu_utl); 
+    printf("Turnaround average is %.2f seconds\n", turn_avg);
+    printf("Wait average is %.2f seconds\n", wait_avg);
+    printf("\n");
+    
+
+    
     
 
 
