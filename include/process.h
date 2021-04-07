@@ -36,6 +36,7 @@ public:
     uint64_t getCurrentBurstTime() const;
     uint64_t getBurstStartTime() const;
     uint64_t getRemainingBurstTime(uint64_t current_time) const;
+    uint16_t getCurrentBurst() const;
     State getState() const;
     bool isInterrupted() const;
     int8_t getCpuCore() const;
