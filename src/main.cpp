@@ -66,6 +66,22 @@ int main(int argc, char **argv)
             
         }
     }
+
+    // Sort the inital ready queue
+    {
+        std::lock_guard<std::mutex> lock(shared_data->mutex);
+        if(!shared_data->ready_queue.empty())
+        {
+            SjfComparator sjf;
+            if (shared_data->algorithm == ScheduleAlgorithm::SJF) {
+                shared_data->ready_queue.sort(sjf);
+            }
+            PpComparator pp;
+            if (shared_data->algorithm == ScheduleAlgorithm::PP) {
+                shared_data->ready_queue.sort(pp);
+            }
+        }
+    }
     
 
     // Free configuration data from memory
@@ -128,62 +144,65 @@ int main(int argc, char **argv)
         // RR check
         // change to loop below
         if (shared_data->algorithm == ScheduleAlgorithm::RR) {
-            std::list<Process *>::iterator it;
-            for (it = shared_data->ready_queue.begin(); it!= shared_data->ready_queue.end(); it++) {
-                Process* current_process = *it;
-                if (current_process->getState() == Process::State::Running) {
-                    int elapsedTime = current_time - processes[i]->getBurstStartTime();
-                    if (elapsedTime >= shared_data->time_slice) {
-                        std::lock_guard<std::mutex> lock(shared_data->mutex);
-                        processes[i]->interrupt();
-                    }
+            std::lock_guard<std::mutex> lock(shared_data->mutex);
+            for(int i = 0; i < processes.size(); i++)
+            {
+                if( processes[i]->getState() == Process::State::Running && current_time - processes[i]->getBurstStartTime() > shared_data->time_slice)
+                {
+                    processes[i]->interrupt();
                 }
             }
         }
    
-    /*
+    
         // PP
+        
         if (shared_data->algorithm == ScheduleAlgorithm::PP) {
             // change loop, create iterator for std::list
-            std::list<Process *>::iterator it;
-            for (it = shared_data->ready_queue.end(); it != shared_data->ready_queue.begin(); it--) {
-                Process* current_process = *it;
-                Process* next_process = *it - 1;
-                if (current_process->getState() == Process::State::Running) {
-                    // where do we check? front or back of each process?
-                    if (current_process->getPriority() > next_process->getPriority()) {
-                        std::lock_guard<std::mutex> lock(shared_data->mutex);
-                        processes[i]->interrupt();
-                    }
-                }
-            }
-        }
-        */
-        {
-        std::lock_guard<std::mutex> lock(shared_data->mutex);
-        if(shared_data->ready_queue.size() > 0)
-        {
-            if(shared_data->algorithm == ScheduleAlgorithm::PP) 
+            std::lock_guard<std::mutex> lock(shared_data->mutex);
+            std::vector<Process *> running_processes;
+            for(int i = 0; i < processes.size(); i++)
             {
-                std::list<Process *>::iterator it;
-                it = shared_data->ready_queue.begin();
-                for(int i = 0; i < processes.size(); i++)
+                if( processes[i]->getState() == Process::State::Running )
                 {
-                    Process* current_ready_process = *it;
-                    if( processes[i]->getState() == Process::State::Running)
-                    {
-                        if(current_ready_process->getPriority() < processes[i]->getPriority())
+                    running_processes.push_back(processes[i]);
+                }   
+            }
+            std::list<Process *>::iterator it;
+            for (it = shared_data->ready_queue.begin(); it!= shared_data->ready_queue.end(); it++) {
+                Process* current_process = *it;
+                bool interrupt = false;
+                int index = -1;
+                for (int i = 0; i < running_processes.size(); i++)
+                {
+                    if ( current_process->getPriority() < running_processes[i]->getPriority() ) {
+                        if( interrupt )
                         {
-                            processes[i]->interrupt();
-                            if( it != shared_data->ready_queue.end())
+                            if(running_processes[i]->getPriority() < running_processes[index]->getPriority() )
                             {
-                               it++; 
+                                index = i;
+                            }
+                            else if (running_processes[i]->getPriority() == running_processes[index]->getPriority())
+                            {
+                                if(running_processes[i]->getBurstStartTime() > running_processes[index]->getBurstStartTime())
+                                {
+                                    index = i;
+                                }
                             }
                         }
+                        else
+                        {
+                            interrupt = true;
+                            index = i;
+                        }
                     }
+                } 
+                if(interrupt)
+                {
+                    running_processes[index]->interrupt();
+                    running_processes.erase(running_processes.begin() + index);
                 }
             }
-        }
         }
 
         //   - *Sort the ready queue (if needed - based on scheduling algorithm)
@@ -220,7 +239,6 @@ int main(int argc, char **argv)
         // sleep 50 ms
         usleep(50000);
     }
-    printf("done\n");
 
 
     // wait for threads to finish
@@ -265,10 +283,12 @@ void coreRunProcesses(uint8_t core_id, SchedulerData *shared_data)
         Process* core_process;
         {
             std::lock_guard<std::mutex> lock(shared_data->mutex);
+
             core_process = shared_data->ready_queue.front();
             if(core_process != NULL)
             {
                 shared_data->ready_queue.pop_front();
+                
             }
         }
         if(core_process != NULL){
@@ -280,7 +300,8 @@ void coreRunProcesses(uint8_t core_id, SchedulerData *shared_data)
         core_process->setBurstStartTime(currentTime());
         while( ((currentTime() - core_process->getBurstStartTime()) < core_process->getCurrentBurstTime()) && !(core_process->isInterrupted()) ) {}
         uint64_t end_time = currentTime();
-        core_process->updateBurstTime(core_process->getCurrentBurst(), end_time-core_process->getCurrentBurstTime());
+
+        //core_process->updateBurstTime(core_process->getCurrentBurst(), end_time-core_process->getCurrentBurstTime());
         core_process->updateProcess(end_time);
 
         //place the process back in the appropriate queue

@@ -156,7 +156,7 @@ void Process::updateProcess(uint64_t current_time)
     // cpu time, and remaining timed
     //---------------unfinished---------------
     uint64_t elapsed_time = (current_time-getBurstStartTime());
-    //updateBurstTime(current_burst, burst_times[current_burst] - elapsed_time );
+    
     if(state == State::Running)
     {
         remain_time = remain_time - (current_time - getBurstStartTime());
@@ -165,6 +165,7 @@ void Process::updateProcess(uint64_t current_time)
             remain_time = 0;
         }
         cpu_time = cpu_time + elapsed_time;
+        updateBurstTime(current_burst, getCurrentBurstTime() - elapsed_time );
     }
     else if(state == State::Ready)
     {
