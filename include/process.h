@@ -16,6 +16,7 @@ private:
     uint32_t *burst_times;      // CPU/IO burst array of times (in ms)
     uint8_t priority;           // process priority (0-4)
     uint64_t burst_start_time;  // time that the current CPU/IO burst began
+    uint64_t ready_start_time;  // time that the process was put into the ready queue
     State state;                // process state
     bool is_interrupted;        // whether or not the process is being interrupted
     int8_t core;                // CPU core currently running on
@@ -35,6 +36,7 @@ public:
     uint8_t getPriority() const;
     uint64_t getCurrentBurstTime() const;
     uint64_t getBurstStartTime() const;
+    uint64_t getReadyStartTime() const;
     uint64_t getRemainingBurstTime(uint64_t current_time) const;
     uint16_t getCurrentBurst() const;
     State getState() const;
@@ -46,6 +48,7 @@ public:
     double getRemainingTime() const;
 
     void setBurstStartTime(uint64_t current_time);
+    void setReadyStartTime(uint64_t current_time);
     void setState(State new_state, uint64_t current_time);
     void setCpuCore(int8_t core_num);
     void interrupt();
