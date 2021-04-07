@@ -141,13 +141,14 @@ int main(int argc, char **argv)
             }
         }
    
+    /*
         // PP
         if (shared_data->algorithm == ScheduleAlgorithm::PP) {
             // change loop, create iterator for std::list
             std::list<Process *>::iterator it;
-            for (it = shared_data->ready_queue.begin(); it != shared_data->ready_queue.end(); it++) {
+            for (it = shared_data->ready_queue.end(); it != shared_data->ready_queue.begin(); it--) {
                 Process* current_process = *it;
-                Process* next_process = *it + 1;
+                Process* next_process = *it - 1;
                 if (current_process->getState() == Process::State::Running) {
                     // where do we check? front or back of each process?
                     if (current_process->getPriority() > next_process->getPriority()) {
@@ -156,6 +157,33 @@ int main(int argc, char **argv)
                     }
                 }
             }
+        }
+        */
+        {
+        std::lock_guard<std::mutex> lock(shared_data->mutex);
+        if(shared_data->ready_queue.size() > 0)
+        {
+            if(shared_data->algorithm == ScheduleAlgorithm::PP) 
+            {
+                std::list<Process *>::iterator it;
+                it = shared_data->ready_queue.begin();
+                for(int i = 0; i < processes.size(); i++)
+                {
+                    Process* current_ready_process = *it;
+                    if( processes[i]->getState() == Process::State::Running)
+                    {
+                        if(current_ready_process->getPriority() < processes[i]->getPriority())
+                        {
+                            processes[i]->interrupt();
+                            if( it != shared_data->ready_queue.end())
+                            {
+                               it++; 
+                            }
+                        }
+                    }
+                }
+            }
+        }
         }
 
         //   - *Sort the ready queue (if needed - based on scheduling algorithm)
@@ -339,13 +367,23 @@ void coreRunProcesses(uint8_t core_id, SchedulerData *shared_data)
         core_process->updateProcess(currentTime());
         core_process->setState(Process::State::Running, currentTime());
         core_process->setBurstStartTime(currentTime());
-        while( ((currentTime() - core_process->getBurstStartTime()) < core_process->getCurrentBurstTime()) || core_process->isInterrupted() ) {}
+        while( ((currentTime() - core_process->getBurstStartTime()) < core_process->getCurrentBurstTime()) && !(core_process->isInterrupted()) ) {}
         uint64_t end_time = currentTime();
         core_process->updateBurstTime(core_process->getCurrentBurst(), end_time-core_process->getCurrentBurstTime());
         core_process->updateProcess(end_time);
 
         //place the process back in the appropriate queue
-        if(core_process->getRemainingTime() > 0)
+        if(core_process->isInterrupted())
+        {   //into ready queue if interrupted
+            std::lock_guard<std::mutex> lock(shared_data->mutex);
+            core_process->interruptHandled();
+            core_process->setReadyStartTime(currentTime());
+            core_process->setState(Process::State::Ready, currentTime());
+            shared_data->ready_queue.push_back(core_process);
+            //--------------- modify cpu burst time -------------
+            //done earlier in the code
+        }
+        else if(core_process->getRemainingTime() > 0)
         {   //more time remaining - IO
             core_process->setState(Process::State::IO, currentTime());
             core_process->nextBurst();
@@ -355,15 +393,6 @@ void coreRunProcesses(uint8_t core_id, SchedulerData *shared_data)
         {   //no more process remaining - terminate
             core_process->setState(Process::State::Terminated, currentTime());
             core_process->updateProcess(end_time);
-        }
-        else if(core_process->isInterrupted())
-        {   //into ready queue if interrupted
-            std::lock_guard<std::mutex> lock(shared_data->mutex);
-            core_process->interruptHandled();
-            core_process->setReadyStartTime(currentTime());
-            shared_data->ready_queue.push_back(core_process);
-            //--------------- modify cpu burst time -------------
-            //done earlier in the code
         }
         
         //context switch time
